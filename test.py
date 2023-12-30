@@ -2,7 +2,8 @@ import pyaudio
 import wave
 import speech_recognition as sr
 import pyttsx3
-
+import io
+import sys
 speech_to_text = sr.Recognizer()
 
 FRAMES_PER_BUFFER = 3200
@@ -10,8 +11,9 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000
 p = pyaudio.PyAudio()
-
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 print("start recording...")
+print("早上好")
 stream = p.open(
    format=FORMAT,
    channels=CHANNELS,
