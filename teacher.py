@@ -11,7 +11,7 @@ class SpeechToText:
       self.rg.adjust_for_ambient_noise(source, duration=0.2)
       audioData = self.rg.listen(source)
       try:
-        text = self.rg.recognize_google(audioData, language='zh-tw')
+        text = self.rg.recognize_google(audioData, language='zh-TW')
 #         text = self.rg.recognize_whisper(audioData,model='base',language='chinese') # model tiny, base, small, medium, large, tiny.en, base.en, small.en, medium.en
       except:
         text = ''
