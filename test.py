@@ -1,28 +1,61 @@
-import re
+import tkinter as tk
+import pyaudio
+import wave
+import threading
 
-text = "項目：住院，醫療，2020年7月6日，20000。，其他，2020年7月6日，6000。項目：應酬，其他，2020年7月5日"
+class AudioRecorder:
+    def __init__(self):
+        self.is_recording = False
+        self.frames = []
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        self.rate = 16000
+        self.frames_per_buffer = 3200
+        self.pyaudio_instance = pyaudio.PyAudio()
 
-# 使用 split 將文本分割成不同的段落
-paragraphs = text.split('。')
+    def start_recording(self):
+        self.is_recording = True
+        self.frames = []
+        self.stream = self.pyaudio_instance.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            input=True,
+            frames_per_buffer=self.frames_per_buffer
+        )
+        self.recording_thread = threading.Thread(target=self.record)
+        self.recording_thread.start()
 
-# 定義正規表達式模式
-pattern = re.compile(r'(?:項目：)?([^，]+)，([^，]+)，(\d{4})年(\d+)月(\d+)日，(\d+)')
+    def stop_recording(self):
+        self.is_recording = False
+        self.stream.stop_stream()
+        self.stream.close()
+        self.recording_thread.join()
 
-# 定義存放結果的列表
-list1 = []  # 有缺少的段落
-list2 = []  # 沒有缺少的段落
+        with wave.open("recording.wav", 'wb') as wf:
+            wf.setnchannels(self.channels)
+            wf.setsampwidth(self.pyaudio_instance.get_sample_size(self.format))
+            wf.setframerate(self.rate)
+            wf.writeframes(b''.join(self.frames))
 
-# 使用正規表達式檢查每段
-for paragraph in paragraphs:
-    if paragraph:  # 確保不處理空的段落
-        match = pattern.match(paragraph)
-        if match and len(match.groups()) == 6:
-            list2.append(match.groups())
-        elif "項目：" in paragraph:
-            list1.append(paragraph)
+    def record(self):
+        while self.is_recording:
+            data = self.stream.read(self.frames_per_buffer)
+            self.frames.append(data)
 
-# 列印結果
-print("有缺少的段落:", list1)
-print("沒有缺少的段落:", list2)
+# Tkinter界面
+def toggle_recording():
+    if not recorder.is_recording:
+        recorder.start_recording()
+        button.config(text='Stop Recording')
+    else:
+        recorder.stop_recording()
+        button.config(text='Start Recording')
 
-print(list1[0][4])
+root = tk.Tk()
+recorder = AudioRecorder()
+button = tk.Button(root, text='Start Recording', command=toggle_recording)
+button.pack()
+
+root.mainloop()
+
