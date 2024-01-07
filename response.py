@@ -12,18 +12,15 @@ from datetime import datetime
 import asyncio
 import sqlite3
 import tkinter as tk
-from tkinter import messagebox
+from tkinter.scrolledtext import ScrolledText
 import threading
 
 current_datetime = datetime.now()
 keys = ['sess-GxcoEBANtwvy0i1EhLOYGPb4GCyWJQIwlE7Jfq37','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', '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']
 max_keys = 1
 avliable_key = 0
-y = current_datetime.year; m=current_datetime.month; d=current_datetime.day
-
-speech_to_text = sr.Recognizer()
-avliable_key = 0
 response_text = ''
+uncomplete_text = []; complete_text = []
 
 class AudioRecorder:
     def __init__(self):
@@ -65,18 +62,19 @@ class AudioRecorder:
             data = self.stream.read(self.frames_per_buffer)
             self.frames.append(data)
 
-async def sendrequest():
+async def sendrequest(result_text):
     global avliable_key
     global response_text
     with sr.AudioFile("output.wav") as source:
         print("im in the request")
+        speech_to_text = sr.Recognizer()
         audio = speech_to_text.record(source)
         try:
             text = speech_to_text.recognize_google(audio, language='zh-TW')
         except sr.exceptions.UnknownValueError as e:
-            result_text.set("I can't hear you, please click the microphone to start recording again.")
+            result_text.set("我聽不懂，你再按一次那個酷酷的麥克風")
             return
-        result_text.set("Processing...... this may take a few seconds")
+        result_text.set("再跑了...... 等我一下")
         while response_text == "":
             #print("using " + str(avliable_key) + " key")
             client = AsyncOpenAI(api_key=keys[avliable_key],)
@@ -84,7 +82,7 @@ async def sendrequest():
                 response = await client.chat.completions.create(
                     model='gpt-3.5-turbo',
                     messages= [
-                        {"role": "system", "content": "你是個記帳輔助員，你要幫要照我的規則來幫我記帳，沒花錢就不用記"},
+                        {"role": "system", "content": "你是個記帳輔助員，你要幫要照我的規則來幫我記帳"},
                         {"role": "user", "content": "我上個月在吃了300元的牛肉麵，今天是2024年1月3日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"},
                         {"role": "assistant", "content": "項目：牛肉麵，餐飲，2023年12月3日，300。"},
                         {"role": "user", "content": "我前天超商花105元，今天是2012年6月8日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"},
@@ -105,9 +103,9 @@ async def sendrequest():
                         {"role": "assistant", "content": "項目：住院，醫療，2020年7月6日，20000。項目：賭博，其他，2020年7月6日，6000。項目：應酬，其他，2020年7月5日，2000。"},
                         {"role": "user", "content": "，去年11月去漫展花了兩千二，兩個禮拜前又去一次花了七千，今天是2011年10月30日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"},
                         {"role": "assistant", "content": "項目：漫展，娛樂，2010年11月30日，2200。項目：漫展，娛樂，2011年10月16日，7000。"},
-                        {"role": "user", "content": text + f"今天是{y}年{m}月{d}日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"}
+                        {"role": "user", "content": text + f"今天是{current_datetime.year}年{current_datetime.month}月{current_datetime.day}日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"}
                     ],
-                    temperature=0.3
+                    temperature=0.8
                 )
                 #print(response)
                 response_text = response.choices[0].message.content
@@ -116,7 +114,6 @@ async def sendrequest():
                     avliable_key = 0
                 else :
                     avliable_key += 1
-                #print("RateLimitError")
 
 def check_text(text):
     paragraphs = text.split('。')
@@ -135,120 +132,117 @@ def check_text(text):
                 list1.append(paragraph)
     return list1, list2
 
-async def main():
+async def async_toggle_recording(result_text, recorder, microphone_button):
     global response_text
-    while response_text.find("抱歉我聽不懂") != -1 or response_text == "":
-        err = ""
-        err = await sendrequest()
-        if err == "ValueError":
-            print("未接收到聲音，請重新錄製。")
-            continue
-        print(response_text)
-        uncomplete_text, complete_text = check_text(response_text)
-        for ut in uncomplete_text:
-            match = re.compile(r'項目：([^，]+)，').search(ut)
-            print("檢測到項目：'"+match.group(1)+"'的錄音不完整，請重新錄製。")
-    return complete_text
-
-conn = sqlite3.connect('track_your_spending.db')
-c = conn.cursor()
-uncomplete_text = []; complete_text = []
-
-async def async_toggle_recording():
     if not recorder.is_recording:
+        response_text = ''
         recorder.start_recording()
-        microphone_button.config(text='🔴 Recording...')
+        microphone_button.config(text='🔴 正在錄製...')
     else:
-        global complete_text, uncomplete_text, response_text
+        global complete_text, uncomplete_text
         recorder.stop_recording()
-        microphone_button.config(text='')
-        print("sending request")
-        await sendrequest()
+        microphone_button.config(text='🔄')
+        await sendrequest(result_text)
         print(response_text)
-        if response_text == "" or  response_text.find("抱歉我聽不懂") >= 1:
-            result_text.set("Sorry, I don't understand. Please record it again. :( ")
-            microphone_button.config(text='🎤 Start Recording')
+        if response_text == "" or "抱歉我聽不懂" in response_text or "抱歉" in response_text or "具體" in response_text:
+            result_text.set("我聽不懂，你大嘴巴 :( ")
+            microphone_button.config(text='🎤 麥克風我是')
         else: 
             uncomplete_text, complete_text = check_text(response_text)
             print(complete_text, uncomplete_text)
             ct = ""; ut = ""
             ct = [cText for cText in complete_text]
             ut = [uText for uText in uncomplete_text]
-            result_text.set(f"Done! Press OK to save data or Cancel to re-record.\nPlease cheack the infomation I heard:\n{ct}\nThe Information I miss:\n{ut}") 
+            result_text.set(f"結束! 按OK存資料或Cancel在錄一次.\n我聽到的:\n{ct}\n我聽漏的:\n{ut}") 
             microphone_button.config(text='🫠🫠🫠')
 
-loop = asyncio.new_event_loop()
-def start_async_toggle_recording():
-    # 在異步事件循環中運行 async_toggle_recording
-    asyncio.run_coroutine_threadsafe(async_toggle_recording(), loop)
-def run_asyncio_loop():
-    loop.run_forever()
-threading.Thread(target=run_asyncio_loop, daemon=True).start()
+def userInterface():
+    root = tk.Tk()
+    root.title("Voice-Controlled Accounting System")
+    root.geometry("500x500")
+    # Function to handle the OK button click.
+    def on_ok_click():
+        global complete_text, uncomplete_text, response_text
+        if len(complete_text) > 0 or len(uncomplete_text) > 0:
+            conn = sqlite3.connect('track_your_spending.db')
+            c = conn.cursor()
+            for text in complete_text:
+                c.execute(f"""INSERT INTO spending 
+                    (Year,Month,Day,Spending_Category,Expense_Item,Cost)
+                    VALUES ({text[2]}, {text[3]}, {text[4]}, '{text[1]}', '{text[0]}', {text[5]})""")
+            conn.commit()
+            # Function to handle clicking on the microphone button.
+            result_text.set("存好資料了! 請按麥克風開始錄製.")
+            microphone_button.config(text='🎤 我是麥克風')
+            complete_text =  []; uncomplete_text = []; response_text = ''
+            conn.commit()
+            conn.close()
 
-# Function to handle the OK button click.
-def on_ok_click():
-    global complete_text, uncomplete_text, response_text
-    if len(complete_text) > 0:
-        for text in complete_text:
-            c.execute(f"""INSERT INTO spending 
-                (Year,Month,Day,Spending_Category,Expense_Item,Cost)
-                VALUES ({text[2]}, {text[3]}, {text[4]}, '{text[1]}', '{text[0]}', {text[5]})""")
+    # Function to handle the Cancel button click.
+    def on_cancel_click():
+        global complete_text, uncomplete_text, response_text
+        if len(complete_text) > 0 or len(uncomplete_text) > 0:
+            result_text.set("已取消，按🎤重錄")
+            microphone_button.config(text='🎤 我是麥克風')
+            complete_text =  []; uncomplete_text = []; response_text = ''
+
+    # Functon to shoe database
+    def show_database():
+        conn = sqlite3.connect('track_your_spending.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM spending") 
+        data = c.fetchall()
+        # 创建一个新窗口来显示数据库内容
+        popup = tk.Toplevel(root)
+        popup.title("Database Content")
+        # 创建文本框用于显示数据库内容
+        text_widget = tk.Text(popup)
+        text_widget.pack()
+        # 将数据库内容插入到文本框中
+        for row in data:
+            text_widget.insert(tk.END, f"{row}\n")
         conn.commit()
-        # Function to handle clicking on the microphone button.
-        result_text.set("Data Saved! Please click the microphone to start recording.")
-        microphone_button.config(text='🎤 Start Recording')
-        complete_text =  []; uncomplete_text = []; response_text = ''
+        conn.close()
 
-# Function to handle the Cancel button click.
-def on_cancel_click():
-    global complete_text, uncomplete_text, response_text
-    if len(complete_text) > 0:
-        result_text.set("Canceled, Please click the microphone to start recording.")
-        microphone_button.config(text='🎤 Start Recording')
-        complete_text =  []; uncomplete_text = []; response_text = ''
+    loop = asyncio.new_event_loop()
+    def start_async_toggle_recording():
+        # 在異步事件循環中運行 async_toggle_recording
+        asyncio.run_coroutine_threadsafe(async_toggle_recording(result_text, recorder, microphone_button), loop)
+    def run_asyncio_loop():
+        loop.run_forever()
+    threading.Thread(target=run_asyncio_loop, daemon=True).start()
+    recorder = AudioRecorder()
 
-def show_database():
-    # 查询数据库内容
+    # Top frame for microphone and database buttons
+    top_frame = tk.Frame(root)
+    top_frame.pack(pady=10)
 
-    c.execute("SELECT * FROM spending")  # 你需要替换成你实际的表名
-    data = c.fetchall()
+    # Microphone button
+    microphone_button = tk.Button(top_frame, text="🎤 我是麥克風", command=start_async_toggle_recording, font='Arial')
+    microphone_button.grid(row=0, column=0, padx=12, pady=8)
 
-    # 创建一个新窗口来显示数据库内容
-    popup = tk.Toplevel(root)
-    popup.title("Database Content")
+    # Database button
+    database_button = tk.Button(top_frame, text="📝", command=show_database)
+    database_button.grid(row=0, column=1)
 
-    # 创建文本框用于显示数据库内容
-    text_widget = tk.Text(popup)
-    text_widget.pack()
+    # Result text
+    result_text = tk.StringVar()
+    result_text.set("請點擊🎤開始錄製")
+    result_label = tk.Label(root, textvariable=result_text)
+    result_label.pack(pady=10)
 
-    # 将数据库内容插入到文本框中
-    for row in data:
-        text_widget.insert(tk.END, f"{row}\n")
+    # Bottom frame for OK and Cancel buttons
+    bottom_frame = tk.Frame(root)
+    bottom_frame.pack(pady=10)
 
-root = tk.Tk()
-root.title("Voice-Controlled Accounting System")
+    # OK button
+    ok_button = tk.Button(bottom_frame, text="OK", command=on_ok_click)
+    ok_button.pack(side=tk.RIGHT, padx=5, pady= 30)
 
-# Result text variable
-microphone_button = tk.Button(root, text="🎤 Start Recording", command=start_async_toggle_recording)
-microphone_button.pack()
-# database button
-database_button = tk.Button(root, text="📝", command=show_database)
-database_button.pack()
-# Microphone text
-result_text = tk.StringVar()
-result_text.set("Please click the microphone to start recording.")
-# Result display
-result_label = tk.Label(root, textvariable=result_text)
-result_label.pack()
-# OK button
-ok_button = tk.Button(root, text="OK", command=on_ok_click)
-ok_button.pack(side=tk.LEFT)
-# Cancel button
-cancel_button = tk.Button(root, text="Cancel", command=on_cancel_click)
-cancel_button.pack(side=tk.RIGHT)
-# Run the application
-recorder = AudioRecorder()
+    # Cancel button
+    cancel_button = tk.Button(bottom_frame, text="Cancel", command=on_cancel_click)
+    cancel_button.pack(side=tk.LEFT, padx=5, pady= 30)
 
-root.mainloop()
-conn.commit()
-conn.close()
+    root.mainloop()
+
+userInterface()
