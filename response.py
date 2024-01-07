@@ -12,6 +12,7 @@ from datetime import datetime
 import asyncio
 import sqlite3
 import tkinter as tk
+from tkinter import messagebox
 import threading
 
 current_datetime = datetime.now()
@@ -83,7 +84,7 @@ async def sendrequest():
                 response = await client.chat.completions.create(
                     model='gpt-3.5-turbo',
                     messages= [
-                        {"role": "system", "content": "你是個記帳輔助員，你要幫要照我的規則來幫我記帳"},
+                        {"role": "system", "content": "你是個記帳輔助員，你要幫要照我的規則來幫我記帳，沒花錢就不用記"},
                         {"role": "user", "content": "我上個月在吃了300元的牛肉麵，今天是2024年1月3日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"},
                         {"role": "assistant", "content": "項目：牛肉麵，餐飲，2023年12月3日，300。"},
                         {"role": "user", "content": "我前天超商花105元，今天是2012年6月8日，品項在以下分類：餐飲、生活、娛樂、交通、投資、醫療、其他"},
@@ -151,12 +152,6 @@ async def main():
 
 conn = sqlite3.connect('track_your_spending.db')
 c = conn.cursor()
-#for text in result:
-#    c.execute(f"""INSERT INTO spending 
-#        (Year,Month,Day,Spending_Category,Expense_Item,Cost)
-#        VALUES ({text[2]}, {text[3]}, {text[4]}, '{text[1]}', '{text[0]}', {text[5]})""")
-
-# Function to handle clicking on the microphone button.
 uncomplete_text = []; complete_text = []
 
 async def async_toggle_recording():
@@ -164,25 +159,22 @@ async def async_toggle_recording():
         recorder.start_recording()
         microphone_button.config(text='🔴 Recording...')
     else:
-        global complete_text, uncomplete_text
+        global complete_text, uncomplete_text, response_text
         recorder.stop_recording()
         microphone_button.config(text='')
         print("sending request")
         await sendrequest()
-        #response_text = "項目：賭博，娛樂，2024年1月6日，600。項目：你媽，娛樂，2024年1月，60。項目：，娛樂，2024年1月6日，600。"
         print(response_text)
         if response_text == "" or  response_text.find("抱歉我聽不懂") >= 1:
             result_text.set("Sorry, I don't understand. Please record it again. :( ")
             microphone_button.config(text='🎤 Start Recording')
         else: 
             uncomplete_text, complete_text = check_text(response_text)
+            print(complete_text, uncomplete_text)
             ct = ""; ut = ""
-            ct += [cText for cText in complete_text]; ut += [uText for uText in uncomplete_text]
-            #print(ct, ut)
-            #print(complete_text, uncomplete_text)
+            ct = [cText for cText in complete_text]
+            ut = [uText for uText in uncomplete_text]
             result_text.set(f"Done! Press OK to save data or Cancel to re-record.\nPlease cheack the infomation I heard:\n{ct}\nThe Information I miss:\n{ut}") 
-            
-            #要改uncompletetext + complete_text
             microphone_button.config(text='🫠🫠🫠')
 
 loop = asyncio.new_event_loop()
@@ -197,6 +189,12 @@ threading.Thread(target=run_asyncio_loop, daemon=True).start()
 def on_ok_click():
     global complete_text, uncomplete_text, response_text
     if len(complete_text) > 0:
+        for text in complete_text:
+            c.execute(f"""INSERT INTO spending 
+                (Year,Month,Day,Spending_Category,Expense_Item,Cost)
+                VALUES ({text[2]}, {text[3]}, {text[4]}, '{text[1]}', '{text[0]}', {text[5]})""")
+        conn.commit()
+        # Function to handle clicking on the microphone button.
         result_text.set("Data Saved! Please click the microphone to start recording.")
         microphone_button.config(text='🎤 Start Recording')
         complete_text =  []; uncomplete_text = []; response_text = ''
@@ -205,9 +203,27 @@ def on_ok_click():
 def on_cancel_click():
     global complete_text, uncomplete_text, response_text
     if len(complete_text) > 0:
-        result_text.set("Data Saved! Please click the microphone to start recording.")
+        result_text.set("Canceled, Please click the microphone to start recording.")
         microphone_button.config(text='🎤 Start Recording')
         complete_text =  []; uncomplete_text = []; response_text = ''
+
+def show_database():
+    # 查询数据库内容
+
+    c.execute("SELECT * FROM spending")  # 你需要替换成你实际的表名
+    data = c.fetchall()
+
+    # 创建一个新窗口来显示数据库内容
+    popup = tk.Toplevel(root)
+    popup.title("Database Content")
+
+    # 创建文本框用于显示数据库内容
+    text_widget = tk.Text(popup)
+    text_widget.pack()
+
+    # 将数据库内容插入到文本框中
+    for row in data:
+        text_widget.insert(tk.END, f"{row}\n")
 
 root = tk.Tk()
 root.title("Voice-Controlled Accounting System")
@@ -215,6 +231,9 @@ root.title("Voice-Controlled Accounting System")
 # Result text variable
 microphone_button = tk.Button(root, text="🎤 Start Recording", command=start_async_toggle_recording)
 microphone_button.pack()
+# database button
+database_button = tk.Button(root, text="📝", command=show_database)
+database_button.pack()
 # Microphone text
 result_text = tk.StringVar()
 result_text.set("Please click the microphone to start recording.")
@@ -229,6 +248,7 @@ cancel_button = tk.Button(root, text="Cancel", command=on_cancel_click)
 cancel_button.pack(side=tk.RIGHT)
 # Run the application
 recorder = AudioRecorder()
+
 root.mainloop()
 conn.commit()
 conn.close()
