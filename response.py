@@ -53,7 +53,7 @@ class AudioRecorder:
         self.stream.close()
         self.recording_thread.join()
 
-        with wave.open("recording.wav", 'wb') as wf:
+        with wave.open("output.wav", 'wb') as wf:
             wf.setnchannels(self.channels)
             wf.setsampwidth(self.pyaudio_instance.get_sample_size(self.format))
             wf.setframerate(self.rate)
@@ -68,6 +68,7 @@ async def sendrequest():
     global avliable_key
     global response_text
     with sr.AudioFile("output.wav") as source:
+        print("im in the request")
         audio = speech_to_text.record(source)
         try:
             text = speech_to_text.recognize_google(audio, language='zh-TW')
@@ -150,7 +151,7 @@ async def main():
 
 conn = sqlite3.connect('track_your_spending.db')
 c = conn.cursor()
-#or text in result:
+#for text in result:
 #    c.execute(f"""INSERT INTO spending 
 #        (Year,Month,Day,Spending_Category,Expense_Item,Cost)
 #        VALUES ({text[2]}, {text[3]}, {text[4]}, '{text[1]}', '{text[0]}', {text[5]})""")
@@ -166,13 +167,24 @@ async def async_toggle_recording():
         global complete_text, uncomplete_text
         recorder.stop_recording()
         microphone_button.config(text='')
+        print("sending request")
         await sendrequest()
-        uncomplete_text, complete_text = check_text(response_text)
+        #response_text = "項目：賭博，娛樂，2024年1月6日，600。項目：你媽，娛樂，2024年1月，60。項目：，娛樂，2024年1月6日，600。"
+        print(response_text)
         if response_text == "" or  response_text.find("抱歉我聽不懂") >= 1:
             result_text.set("Sorry, I don't understand. Please record it again. :( ")
             microphone_button.config(text='🎤 Start Recording')
-        else:
-            result_text.set("Done! Press OK to save data or Cancel to re-record.") #要改uncompletetext + complete_text
+        else: 
+            uncomplete_text, complete_text = check_text(response_text)
+            ct = ""; ut = ""
+            ct += [cText for cText in complete_text]; ut += [uText for uText in uncomplete_text]
+            #print(ct, ut)
+            #print(complete_text, uncomplete_text)
+            result_text.set(f"Done! Press OK to save data or Cancel to re-record.\nPlease cheack the infomation I heard:\n{ct}\nThe Information I miss:\n{ut}") 
+            
+            #要改uncompletetext + complete_text
+            microphone_button.config(text='🫠🫠🫠')
+
 loop = asyncio.new_event_loop()
 def start_async_toggle_recording():
     # 在異步事件循環中運行 async_toggle_recording
@@ -183,19 +195,19 @@ threading.Thread(target=run_asyncio_loop, daemon=True).start()
 
 # Function to handle the OK button click.
 def on_ok_click():
-    global complete_text
-    if complete_text.len > 0:
+    global complete_text, uncomplete_text, response_text
+    if len(complete_text) > 0:
         result_text.set("Data Saved! Please click the microphone to start recording.")
         microphone_button.config(text='🎤 Start Recording')
-        complete_text =  [], uncomplete_text = []
+        complete_text =  []; uncomplete_text = []; response_text = ''
 
 # Function to handle the Cancel button click.
 def on_cancel_click():
-    global complete_text
-    if complete_text.len > 0:
+    global complete_text, uncomplete_text, response_text
+    if len(complete_text) > 0:
         result_text.set("Data Saved! Please click the microphone to start recording.")
         microphone_button.config(text='🎤 Start Recording')
-        complete_text =  [], uncomplete_text = []
+        complete_text =  []; uncomplete_text = []; response_text = ''
 
 root = tk.Tk()
 root.title("Voice-Controlled Accounting System")
@@ -203,23 +215,18 @@ root.title("Voice-Controlled Accounting System")
 # Result text variable
 microphone_button = tk.Button(root, text="🎤 Start Recording", command=start_async_toggle_recording)
 microphone_button.pack()
-
 # Microphone text
 result_text = tk.StringVar()
 result_text.set("Please click the microphone to start recording.")
-
 # Result display
 result_label = tk.Label(root, textvariable=result_text)
 result_label.pack()
-
 # OK button
 ok_button = tk.Button(root, text="OK", command=on_ok_click)
 ok_button.pack(side=tk.LEFT)
-
 # Cancel button
 cancel_button = tk.Button(root, text="Cancel", command=on_cancel_click)
 cancel_button.pack(side=tk.RIGHT)
-
 # Run the application
 recorder = AudioRecorder()
 root.mainloop()
