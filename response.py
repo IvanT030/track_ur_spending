@@ -192,13 +192,10 @@ def userInterface():
         c = conn.cursor()
         c.execute("SELECT * FROM spending") 
         data = c.fetchall()
-        # 创建一个新窗口来显示数据库内容
         popup = tk.Toplevel(root)
         popup.title("Database Content")
-        # 创建文本框用于显示数据库内容
         text_widget = tk.Text(popup)
         text_widget.pack()
-        # 将数据库内容插入到文本框中
         for row in data:
             text_widget.insert(tk.END, f"{row}\n")
         conn.commit()
