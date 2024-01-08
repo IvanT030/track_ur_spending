@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-import pyaudio
 import re
-import wave
-import speech_recognition as sr
-import openai
-from openai import AsyncOpenAI
 import sys
+import wave
+import pyaudio
+import openai
+import speech_recognition as sr
+from openai import AsyncOpenAI
 sys.stdout.encoding
 sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
 from datetime import datetime
@@ -16,7 +16,7 @@ from tkinter.scrolledtext import ScrolledText
 import threading
 
 current_datetime = datetime.now()
-keys = ['sess-GxcoEBANtwvy0i1EhLOYGPb4GCyWJQIwlE7Jfq37','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', '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']
+keys = ['sess-0dSDbsWSPQUpSpWX3gAhyXySPXhCF9LWukx1jEbS','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', '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']
 max_keys = 1
 avliable_key = 0
 response_text = ''
